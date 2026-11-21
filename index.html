@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GargoylePlayer</title>
+<style>
+  :root{
+    --ink:#ffb000; --paper:#0a0703; --soft:#9c6c00; --head:#2a1d06; --key:#140e04; --muted:#d49a1c; --play-h:#ffc53d;
+    --font:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color-scheme:dark;
+  }
+  html[data-theme=bw]{--ink:#e6e6e6;--paper:#000;--soft:#7a7a7a;--head:#242424;--key:#0d0d0d;--muted:#b0b0b0;--play-h:#fff}
+  html[data-theme=wb]{--ink:#1a1a1a;--paper:#fff;--soft:#8a8a8a;--head:#e3e3df;--key:#f6f6f3;--muted:#5a5a5a;--play-h:#000;color-scheme:light}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  bdi{unicode-bidi:isolate}
+  html,body{background:var(--paper);color:var(--ink);height:100%}
+  body{margin:0;font:15px/1.45 var(--font);display:flex;justify-content:center;padding:18px}
+  .app{width:100%;max-width:760px;display:flex;flex-direction:column;gap:12px;min-height:0;height:100%}
+  .top{display:flex;align-items:center;gap:10px}
+  h1{margin:0;font-size:22px;font-weight:700;flex:1;letter-spacing:.3px}
+  button{background:none;border:0;color:var(--ink);cursor:pointer;border-radius:4px;padding:7px;
+    display:inline-flex;align-items:center;justify-content:center;font:inherit}
+  button:hover{background:var(--head)}
+  button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  button:disabled{opacity:.35;cursor:default;background:none}
+  button svg{width:22px;height:22px;fill:currentColor}
+  .btn{border:1px solid var(--soft);padding:5px 11px;font-size:14px}
+  .btn:hover{border-color:var(--ink)}
+  .btn.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+  /* נגן */
+  .player{background:var(--key);border:1px solid var(--soft);border-radius:6px;padding:16px 18px}
+  .title{font-size:19px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:plaintext;text-align:right}
+  .artist{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:plaintext;text-align:right}
+  .sub{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:19px}
+  .transport{direction:ltr;margin-top:12px}  /* בקרי הנגינה נשארים משמאל לימין, כמקובל */
+  .seek{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted)}
+  .seek span{min-width:42px;text-align:center}
+  .live .seek input{opacity:.3;pointer-events:none}
+  input[type=range]{-webkit-appearance:none;appearance:none;flex:1;min-width:0;width:100%;height:6px;border-radius:0;
+    background:linear-gradient(var(--ink),var(--ink)) 0/var(--p,0%) 100% no-repeat,var(--head);
+    border:1px solid var(--soft);cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:18px;background:var(--ink)}
+  input[type=range]::-moz-range-thumb{width:12px;height:18px;border:0;border-radius:0;background:var(--ink)}
+  .controls{display:flex;align-items:center;justify-content:space-between;margin-top:10px;gap:10px;flex-wrap:wrap}
+  .main{display:flex;align-items:center;gap:6px}
+  button.play{background:var(--ink);color:var(--paper);width:48px;height:48px;border-radius:50%}
+  button.play:hover{background:var(--play-h)}
+  button.play svg{width:26px;height:26px}
+  button.toggle{color:var(--soft)} button.toggle.on{color:var(--ink)}
+  .vol{display:flex;align-items:center;gap:6px;width:170px;max-width:100%}
+
+  /* לשוניות */
+  .tabs{display:flex;gap:6px}
+  .tabs button{border:1px solid var(--soft);padding:6px 16px;font-size:14px;border-radius:4px}
+  .tabs button.on{background:var(--ink);color:var(--paper);border-color:var(--ink);font-weight:700}
+  .panel{background:var(--key);border:1px solid var(--soft);border-radius:6px;display:none;flex-direction:column;min-height:0;flex:1}
+  .panel.on{display:flex}
+  .bar{display:flex;gap:6px;padding:10px;border-bottom:1px solid var(--head);flex-wrap:wrap;align-items:center}
+  .field{flex:1;min-width:120px;background:var(--paper);border:1px solid var(--soft);color:var(--ink);border-radius:4px;padding:6px 9px;font:inherit;font-size:14px}
+  .field::placeholder{color:var(--soft)}
+  select.field{flex:0 0 auto;min-width:0}
+  ul{list-style:none;margin:0;padding:0;overflow:auto;flex:1;min-height:80px;scrollbar-color:var(--soft) var(--key)}
+  li{display:flex;align-items:center;gap:10px;padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--head)}
+  li:hover{background:var(--head)}
+  li.cur{background:var(--ink);color:var(--paper)}
+  li.cur .n, li.cur small{color:var(--paper)!important}
+  li.miss{opacity:.45}
+  li .n{width:26px;color:var(--soft);font-size:12px;text-align:left;flex:none;direction:ltr}
+  li .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;unicode-bidi:plaintext;text-align:right}
+  li .t small{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+  li .x{opacity:0;padding:2px 6px;color:inherit;font-size:14px} li:hover .x{opacity:1}
+  li .x.fav{opacity:1;color:var(--ink)} li.cur .x.fav{color:var(--paper)}
+  .empty{padding:30px 16px;text-align:center;color:var(--muted);line-height:1.7}
+  .msg{padding:8px 12px;color:var(--muted);font-size:13px;min-height:20px}
+  .drop{outline:2px dashed var(--ink);outline-offset:-6px}
+
+  /* מילים */
+  .lyhead{padding:10px 14px;border-bottom:1px solid var(--head);color:var(--muted);font-size:13px;display:flex;gap:8px;align-items:center}
+  .lyhead span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lyrics{flex:1;overflow:auto;padding:14px 18px 40px;line-height:1.9;font-size:16px;scroll-behavior:smooth;position:relative}
+  .lyrics p{margin:0;unicode-bidi:plaintext;text-align:start;color:var(--muted)}
+  .lyrics.plain p{color:var(--ink)}
+  .lyrics p.now{color:var(--ink);font-weight:700}
+  .lyrics p.gap{height:.9em}
+
+  .keys{color:var(--soft);font-size:12px;text-align:center;line-height:2}
+  kbd{border:1px solid var(--soft);border-radius:3px;padding:0 5px;font-family:inherit;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <h1>GargoylePlayer</h1>
+    <button class="btn" id="bTheme" title="החלפת צבעים: ענבר, לבן (לבן על שחור), נייר (שחור על לבן)">ענבר</button>
+  </div>
+
+  <div class="player" id="player">
+    <div class="title" id="title">לא נטענה רצועה</div>
+    <div class="artist" id="artist"></div>
+    <div class="sub" id="sub">הוסיפו קבצים, פתחו רשימת השמעה או בחרו תחנת רדיו</div>
+    <div class="transport">
+      <div class="seek">
+        <span id="cur">0:00</span>
+        <input type="range" id="seek" min="0" max="1000" value="0" aria-label="מיקום ברצועה">
+        <span id="dur">0:00</span>
+      </div>
+      <div class="controls">
+        <div class="main">
+          <button class="toggle" id="shuffle" title="ערבוב (S)"><svg viewBox="0 0 24 24"><path d="M10.6 9.2 5.4 4 4 5.4l5.2 5.2 1.4-1.4zM14.5 4l2 2L4 18.6 5.4 20 18 7.5l2 2V4h-5.5zm.3 9.4-1.4 1.4 3.1 3.1-2 2.1H20v-5.5l-2 2-3.2-3.1z"/></svg></button>
+          <button id="prev" title="הקודם (P)"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg></button>
+          <button class="play" id="play" title="נגינה / השהיה (רווח)"><svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg></button>
+          <button id="next" title="הבא (N)"><svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+          <button class="toggle" id="repeat" title="חזרה: כבויה (R)"><svg viewBox="0 0 24 24" id="repIcon"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg></button>
+        </div>
+        <div class="vol">
+          <button id="mute" title="השתקה (M)"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></button>
+          <input type="range" id="vol" min="0" max="100" value="80" aria-label="עוצמת קול">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button data-tab="list" class="on">רשימה</button>
+    <button data-tab="radio">רדיו</button>
+    <button data-tab="lyrics">מילים</button>
+  </div>
+
+  <!-- רשימת השמעה -->
+  <div class="panel on" id="pList">
+    <div class="bar">
+      <button class="btn" id="addFiles">+ קבצים</button>
+      <button class="btn" id="addFolder">+ תיקייה</button>
+      <button class="btn" id="openPl" title="פתיחת רשימת השמעה (m3u, m3u8, pls)">פתיחת רשימה</button>
+      <button class="btn" id="savePl" title="שמירת הרשימה כקובץ m3u8 או pls">שמירת רשימה</button>
+      <input class="field" id="search" placeholder="סינון…">
+      <button class="btn" id="clear">ניקוי</button>
+      <input type="file" id="fileIn" accept="audio/*,.mp3,.m4a,.ogg,.wav,.flac" multiple hidden>
+      <input type="file" id="dirIn" webkitdirectory multiple hidden>
+      <input type="file" id="plIn" accept=".m3u,.m3u8,.pls" hidden>
+    </div>
+    <ul id="list"></ul>
+    <div class="empty" id="empty">גררו לכאן קבצים, תיקייה או רשימת השמעה (m3u / pls),<br>או השתמשו בכפתורים למעלה.</div>
+  </div>
+
+  <!-- רדיו -->
+  <div class="panel" id="pRadio">
+    <div class="bar">
+      <button class="btn" data-cat="metal">מטאל</button>
+      <button class="btn" data-cat="local">מקומי</button>
+      <button class="btn" data-cat="fav">מועדפים</button>
+      <select class="field" id="rsBy" title="לפי מה לחפש">
+        <option value="name">שם</option><option value="tag">סגנון</option><option value="country">מדינה</option>
+      </select>
+      <input class="field" id="rsQ" placeholder="חיפוש תחנות…">
+      <button class="btn" id="rsGo">חיפוש</button>
+    </div>
+    <div class="msg" id="rMsg"></div>
+    <ul id="rList"></ul>
+  </div>
+
+  <!-- מילים -->
+  <div class="panel" id="pLyrics">
+    <div class="lyhead"><span id="lyHead">מילים</span><button class="btn" id="lyRetry" hidden>נסיון נוסף</button></div>
+    <div class="lyrics" id="lyrics"></div>
+  </div>
+
+  <div class="keys"><kbd>רווח</kbd> נגינה/השהיה · <kbd>←</kbd><kbd>→</kbd> 5 שניות · <kbd>↑</kbd><kbd>↓</kbd> עוצמה · <kbd>N</kbd>/<kbd>P</kbd> הבא/הקודם · <kbd>S</kbd> ערבוב · <kbd>R</kbd> חזרה · <kbd>M</kbd> השתקה · גרסה 2.0</div>
+</div>
+
+<audio id="audio" preload="metadata"></audio>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const audio = $('audio');
+const NATIVE = window.gargoyle || null;   // באפליקציה (אלקטרון): גישה לקבצים לפי מיקום במחשב
+const LRCLIB = 'https://lrclib.net';
+const RB_HOSTS = ['https://de1.api.radio-browser.info','https://de2.api.radio-browser.info','https://nl1.api.radio-browser.info','https://at1.api.radio-browser.info'];
+
+let tracks = [];        // {name, artist, album, folder, path, url, size, file, stream, dur, missing}
+let idx = -1;           // הרצועה הנוכחית ברשימה
+let mode = 'list';      // 'list' או 'radio'
+let station = null, radioQueue = [];
+let shuffle = false, repeat = 0, order = [];
+
+const AUDIO_RE = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|webm)$/i;
+const fmt = s => { if(!isFinite(s)) return '0:00'; s=Math.floor(s); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=String(s%60).padStart(2,'0'); return h? `${h}:${String(m).padStart(2,'0')}:${x}` : `${m}:${x}`; };
+const clean = n => n.replace(/\.[^.]+$/,'').replace(/_/g,' ');
+const store = { get(k,d){ try{ const v=localStorage.getItem(k); return v===null?d:JSON.parse(v); }catch(e){ return d; } },
+                set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} } };
+// שורה שמערבבת עברית עם אנגלית ומספרים: כל חלק מבודד, כדי שהסדר לא יתהפך
+function setParts(el, parts){
+  el.textContent = '';
+  parts.filter(x => x!=='' && x!=null).forEach((p,i) => { if(i) el.append(' · '); const b = document.createElement('bdi'); b.textContent = p; el.append(b); });
+}
+const nStations = n => n===1 ? 'תחנה אחת' : n + ' תחנות';
+function timeoutFetch(url, ms){
+  const ac = new AbortController(), tm = setTimeout(()=>ac.abort(), ms||9000);
+  return fetch(url,{signal:ac.signal}).finally(()=>clearTimeout(tm));
+}
+
+/* ===================== רצועות ===================== */
+function fromFilename(t){ // "אמן - שם השיר"
+  let n = t.name.replace(/^\s*\d{1,3}\s*[-.)_]?\s+/, '');
+  const m = n.match(/^(.+?)\s+[-–]\s+(.+)$/);
+  if(m){ t.artist = m[1].trim(); n = m[2].trim(); }
+  t.name = n || t.name;
+}
+function splitTitle(s){ const m = String(s||'').match(/^(.+?)\s+[-–]\s+(.+)$/); return m ? {artist:m[1].trim(), name:m[2].trim()} : {artist:'', name:String(s||'').trim()}; }
+function folderOf(p){ const a = String(p||'').split(/[\\/]/); return a.length>1 ? a[a.length-2] : ''; }
+
+function addFiles(list){   // דפדפן: קובצי File
+  const files = [...list].filter(f => AUDIO_RE.test(f.name) || (f.type||'').startsWith('audio/'));
+  files.sort((a,b)=>(a.webkitRelativePath||a.name).localeCompare(b.webkitRelativePath||b.name,'he',{numeric:true}));
+  addTracks(files.map(f => { const t = {name:clean(f.name), artist:'', album:'', folder:(f.webkitRelativePath||'').split('/').slice(-2,-1)[0]||'', file:f}; fromFilename(t); return t; }));
+}
+function addItems(items){  // אפליקציה: קבצים לפי מיקום
+  addTracks(items.map(it => { const t = {name:clean(it.name), artist:'', album:'', folder:folderOf(it.path), path:it.path, url:it.url, size:it.size}; fromFilename(t); return t; }));
+}
+function addTracks(added, replace){
+  if(replace){ stopList(); tracks = []; idx = -1; }
+  tracks.push(...added);
+  rebuildOrder(); render(); saveList();
+  readAllTags(added.filter(t => !t.stream && !t.tagged));
+  if(idx === -1 && tracks.length && mode==='list' && audio.paused) load(0, false);
+}
+
+/* ---- תגי ID3 (גרסאות 1, 2.2, 2.3, 2.4), גם בעברית ---- */
+const synch = (b,o) => (b[o]&127)<<21 | (b[o+1]&127)<<14 | (b[o+2]&127)<<7 | (b[o+3]&127);
+const be32 = (b,o) => (b[o]<<24 | b[o+1]<<16 | b[o+2]<<8 | b[o+3])>>>0;
+const ascii = (b,o,n) => String.fromCharCode(...b.subarray(o,o+n));
+function unsync(b){ const out=[]; for(let i=0;i<b.length;i++){ out.push(b[i]); if(b[i]===0xFF && b[i+1]===0) i++; } return new Uint8Array(out); }
+function dec(label, bytes){ try{ return new TextDecoder(label).decode(bytes); }catch(e){ return new TextDecoder('utf-8').decode(bytes); } }
+function decodeLegacy(bytes){
+  if(!bytes.some(x=>x>=0x80)) return dec('latin1', bytes);
+  try{ return new TextDecoder('utf-8',{fatal:true}).decode(bytes); }catch(e){}
+  return dec('windows-1255', bytes);
+}
+function decodeText(d){
+  const enc = d[0], b = d.subarray(1); let s;
+  if(enc===1){ s = (b[0]===0xFE && b[1]===0xFF) ? dec('utf-16be', b.subarray(2)) : dec('utf-16le', (b[0]===0xFF && b[1]===0xFE) ? b.subarray(2) : b); }
+  else if(enc===2) s = dec('utf-16be', b);
+  else if(enc===3) s = dec('utf-8', b);
+  else s = decodeLegacy(b);
+  return s.split('\u0000').map(x=>x.replace(/^﻿/,'').trim()).filter(Boolean).join(' / ');
+}
+const FRAMES = {TIT2:'title',TPE1:'artist',TALB:'album',TPE2:'albumArtist', TT2:'title',TP1:'artist',TAL:'album',TP2:'albumArtist'};
+function srcOf(t){
+  if(t.file) return {size:t.file.size, read:(a,b)=>t.file.slice(a,b).arrayBuffer().then(x=>new Uint8Array(x))};
+  if(t.path && NATIVE) return {size:t.size||0, read:(a,b)=>NATIVE.readBytes(t.path,a,b).then(x=>new Uint8Array(x))};
+  return null;
+}
+async function readTags(src){
+  const tags = {};
+  try{
+    const h = await src.read(0,10);
+    if(h[0]===0x49 && h[1]===0x44 && h[2]===0x33 && h[3]>=2 && h[3]<=4){
+      const ver = h[3], flags = h[5], size = Math.min(synch(h,6), 524288); // לא קוראים תמונות עטיפה גדולות
+      let b = await src.read(10, 10+size);
+      if((flags & 0x80) && ver<4) b = unsync(b);
+      let p = 0;
+      if(flags & 0x40 && ver>2) p = ver===4 ? synch(b,0) : be32(b,0)+4;
+      while(p < b.length){
+        let id, fs; const hl = ver===2 ? 6 : 10;
+        if(p+hl > b.length) break;
+        if(ver===2){ id = ascii(b,p,3); fs = b[p+3]<<16 | b[p+4]<<8 | b[p+5]; }
+        else { id = ascii(b,p,4); fs = ver===4 ? synch(b,p+4) : be32(b,p+4); }
+        if(!/^[A-Z0-9]{3,4}$/.test(id) || fs<=0 || p+hl+fs > b.length) break;
+        let d = b.subarray(p+hl, p+hl+fs);
+        const key = FRAMES[id];
+        if(key){
+          let ok = true;
+          if(ver===3 && (b[p+9] & 0xC0)) ok = false;
+          if(ver===4){ const ff=b[p+9]; if(ff & 0x0C) ok=false; if(ff & 0x01) d=d.subarray(4); if(ff & 0x02) d=unsync(d); }
+          if(ok && d.length>1 && !tags[key]) tags[key] = decodeText(d);
+        }
+        p += hl + fs;
+      }
+    }
+    if((!tags.title || !tags.artist) && src.size>128){
+      const t = await src.read(src.size-128, src.size);
+      if(t.length===128 && t[0]===0x54 && t[1]===0x41 && t[2]===0x47){
+        const f = (o,n) => decodeLegacy(t.subarray(o,o+n)).replace(/\u0000.*$/s,'').trim();
+        tags.title ||= f(3,30); tags.artist ||= f(33,30); tags.album ||= f(63,30);
+      }
+    }
+  }catch(e){}
+  return tags;
+}
+let renderQueued = false;
+function queueRender(){ if(renderQueued) return; renderQueued = true; setTimeout(()=>{ renderQueued=false; render(); }, 150); }
+async function readAllTags(list){
+  for(const t of list){
+    const src = srcOf(t); if(!src) continue;
+    const tg = await readTags(src);
+    t.tagged = true;
+    if(tg.title) t.name = tg.title;
+    if(tg.artist || tg.albumArtist) t.artist = tg.artist || tg.albumArtist;
+    if(tg.album) t.album = tg.album;
+    if(tracks[idx]===t && mode==='list'){ showNow(); setSession(); if(tab==='lyrics') showLyrics(); }
+    if($('search').value) queueRender(); else updateRow(tracks.indexOf(t));
+  }
+  saveList();
+}
+
+function rebuildOrder(){
+  order = tracks.map((_,i)=>i);
+  if(shuffle){ for(let i=order.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[order[i],order[j]]=[order[j],order[i]];}
+    if(idx>=0){ order.splice(order.indexOf(idx),1); order.unshift(idx);} }
+}
+
+let objUrl = null;
+function srcUrl(t){
+  if(objUrl){ URL.revokeObjectURL(objUrl); objUrl = null; }
+  if(t.file){ objUrl = URL.createObjectURL(t.file); return objUrl; }
+  return t.url;
+}
+function load(i, autoplay=true){
+  if(i<0||i>=tracks.length) return;
+  const prev = idx;
+  mode = 'list'; station = null; idx = i;
+  const t = tracks[i];
+  audio.src = srcUrl(t);
+  showNow(); markStation();
+  updateRow(prev); updateRow(i);
+  store.set('gp-idx', i);
+  if(autoplay) play();
+  if(tab==='lyrics') showLyrics();
+}
+function play(){
+  if(mode==='list' && idx<0){ if(tracks.length) load(0); return; }
+  audio.play().catch(()=>{});
+}
+function toggle(){ audio.paused ? play() : audio.pause(); }
+function step(dir){
+  if(mode==='radio'){
+    if(!radioQueue.length) return;
+    let p = radioQueue.findIndex(s => s.url===station.url) + dir;
+    if(p>=radioQueue.length) p = 0; if(p<0) p = radioQueue.length-1;
+    playStation(radioQueue[p], radioQueue); return;
+  }
+  if(!tracks.length) return;
+  if(dir<0 && audio.currentTime>3 && isFinite(audio.duration)){ audio.currentTime=0; return; }
+  let pos = order.indexOf(idx) + dir;
+  if(pos>=order.length){ if(repeat===1){ if(shuffle) rebuildOrder(); pos=0; } else { audio.pause(); audio.currentTime=0; return; } }
+  if(pos<0) pos = repeat===1 ? order.length-1 : 0;
+  load(order[pos]);
+}
+function stopList(){ audio.pause(); audio.removeAttribute('src'); audio.load(); if(objUrl){ URL.revokeObjectURL(objUrl); objUrl=null; } }
+
+/* ---- תצוגת "מה מתנגן" ---- */
+function showNow(){
+  if(mode==='radio' && station){
+    $('title').textContent = station.name;
+    $('artist').textContent = '';
+    setParts($('sub'), ['רדיו', station.tags.split(',').slice(0,3).join(', '), station.cc, station.bitrate ? station.bitrate+' קב"ש' : '']);
+    document.title = station.name + ' · GargoylePlayer';
+    return;
+  }
+  if(idx<0) return;
+  const t = tracks[idx];
+  $('title').textContent = t.name;
+  $('artist').textContent = t.artist || '';
+  const bits = [];
+  if(t.stream) bits.push('שידור חי'); else if(t.album) bits.push(t.album); else if(t.folder) bits.push(t.folder);
+  bits.push(`רצועה ${idx+1} מתוך ${tracks.length}`);
+  setParts($('sub'), bits);
+  document.title = (t.artist ? t.artist + ' – ' : '') + t.name;
+}
+function resetNow(){
+  $('title').textContent='לא נטענה רצועה'; $('artist').textContent=''; $('sub').textContent='הוסיפו קבצים, פתחו רשימת השמעה או בחרו תחנת רדיו';
+  document.title='GargoylePlayer'; $('cur').textContent=$('dur').textContent='0:00'; seek.value=0; setFill(seek);
+}
+function setSession(){
+  if(!('mediaSession' in navigator)) return;
+  let md;
+  if(mode==='radio' && station) md = {title:station.name, artist:'רדיו', album:'GargoylePlayer'};
+  else if(idx>=0){ const t = tracks[idx]; md = {title:t.name, artist:t.artist, album:t.album||t.folder}; }
+  if(md) try{ navigator.mediaSession.metadata = new MediaMetadata(md); }catch(e){}
+}
+
+/* ---- רשימה: נבנית מחדש רק בהוספה, הסרה או סינון ---- */
+const rows = new Map();
+function fillRow(li, t, i){
+  li.className = (i===idx && mode==='list' ? 'cur' : '') + (t.missing ? ' miss' : '');
+  li.querySelector('.n').textContent = (i===idx && mode==='list' && !audio.paused) ? '◀' : i+1;
+  const tt = li.querySelector('.t'); tt.textContent = t.name;
+  const extra = t.stream ? (t.artist || 'שידור חי') : t.artist;
+  if(extra){ const sm = document.createElement('small'); sm.textContent = extra; tt.appendChild(sm); }
+  li.title = t.missing ? 'הקובץ לא נמצא' : (t.path || t.url || '');
+}
+function updateRow(i){ const t = tracks[i], li = t && rows.get(t); if(li) fillRow(li, t, i); }
+function render(){
+  const q = $('search').value.toLowerCase();
+  const ul = $('list'); ul.textContent=''; rows.clear();
+  $('empty').style.display = tracks.length ? 'none':'block';
+  const frag = document.createDocumentFragment();
+  tracks.forEach((t,i)=>{
+    if(q && !(t.name+' '+t.artist+' '+(t.album||'')+' '+(t.folder||'')).toLowerCase().includes(q)) return;
+    const li = document.createElement('li'); li.dataset.i = i;
+    li.innerHTML = '<span class="n"></span><span class="t"></span><button class="x" title="הסרה">✕</button>';
+    fillRow(li, t, i); rows.set(t, li); frag.appendChild(li);
+  });
+  ul.appendChild(frag);
+}
+$('list').onclick = e => {
+  const li = e.target.closest('li'); if(!li) return;
+  const i = +li.dataset.i;
+  if(e.target.classList.contains('x')) remove(i);
+  else (i===idx && mode==='list') ? toggle() : load(i);
+};
+function remove(i){
+  const wasCur = i===idx && mode==='list';
+  tracks.splice(i,1);
+  if(i===idx){ idx=-1; if(wasCur){ stopList(); if(tracks.length) load(Math.min(i,tracks.length-1), false); else resetNow(); } }
+  else if(i<idx) idx--;
+  rebuildOrder(); render(); saveList();
+}
+// באפליקציה הרשימה נשמרת בין הפעלות (רק מיקומים וכתובות, בלי הקבצים עצמם)
+let saveTimer = null;
+function saveList(){
+  if(!NATIVE) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>store.set('gp-list', tracks.filter(t=>t.path||t.url).map(t=>({name:t.name,artist:t.artist,album:t.album,folder:t.folder,path:t.path,url:t.url,size:t.size,stream:!!t.stream,dur:t.dur||0,tagged:!!t.tagged}))), 400);
+}
+
+/* ===================== רשימות השמעה: m3u, m3u8, pls ===================== */
+function decodePlaylist(bytes){
+  let b = bytes; if(b[0]===0xEF && b[1]===0xBB && b[2]===0xBF) b = b.subarray(3);
+  try{ return new TextDecoder('utf-8',{fatal:true}).decode(b); }catch(e){ return dec('windows-1255', b); }
+}
+function parsePlaylist(text, ext){
+  const out = [];
+  if(ext==='pls' || /^\s*\[playlist\]/i.test(text)){
+    const map = {};
+    text.split(/\r?\n/).forEach(line => {
+      const m = line.match(/^\s*(File|Title|Length)(\d+)\s*=\s*(.*)$/i);
+      if(m) (map[m[2]] ||= {})[m[1].toLowerCase()] = m[3].trim();
+    });
+    Object.keys(map).sort((a,b)=>a-b).forEach(k => { const e = map[k]; if(e.file) out.push({loc:e.file, title:e.title||'', dur:Math.max(0,parseFloat(e.length)||0)}); });
+  } else {
+    let inf = null;
+    text.split(/\r?\n/).forEach(raw => {
+      const line = raw.trim(); if(!line) return;
+      if(/^#EXTINF:/i.test(line)){ const m = line.slice(8).match(/^\s*(-?[\d.]+)[^,]*,(.*)$/); inf = m ? {dur:parseFloat(m[1]), title:m[2].trim()} : null; return; }
+      if(line.startsWith('#')) return;
+      out.push({loc:line, title:inf ? inf.title : '', dur:inf && inf.dur>0 ? inf.dur : 0}); inf = null;
+    });
+  }
+  return out;
+}
+async function loadPlaylist(pl){ // pl = {name, dir, ext, bytes}
+  const entries = parsePlaylist(decodePlaylist(new Uint8Array(pl.bytes)), pl.ext);
+  if(!entries.length){ flash('הרשימה ריקה או לא מוכרת'); return; }
+  let res;
+  if(NATIVE) res = await NATIVE.resolveEntries(pl.dir, entries.map(e=>e.loc));
+  else res = entries.map(e => /^https?:\/\//i.test(e.loc) ? {stream:true, url:e.loc} : {missing:true, path:e.loc});
+  const list = entries.map((e,i) => {
+    const r = res[i] || {}, st = splitTitle(e.title);
+    const fname = String(r.path||e.loc).split(/[\\/]/).pop();
+    const t = {name: st.name || (r.stream ? e.loc : clean(fname)), artist: st.artist, album:'', folder: r.path ? folderOf(r.path) : '',
+      path: r.path || null, url: r.url || null, size: r.size || 0, stream: !!r.stream, dur: e.dur, missing: !r.stream && r.exists===false || !!r.missing};
+    if(!e.title && !t.stream) fromFilename(t);
+    if(e.title || t.missing) t.tagged = true;   // יש כבר שם מהרשימה; לא קוראים את הקובץ
+    return t;
+  });
+  addTracks(list, true);
+  const miss = list.filter(t=>t.missing).length;
+  setParts($('sub'), ['נפתחה הרשימה', pl.name, miss ? (miss===1 ? 'קובץ אחד לא נמצא' : miss + ' קבצים לא נמצאו') : '']);
+}
+function flash(msg){ $('sub').textContent = msg; }
+$('openPl').onclick = async () => {
+  if(NATIVE){ const pl = await NATIVE.openPlaylist(); if(pl) loadPlaylist(pl); }
+  else $('plIn').click();
+};
+$('plIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value=''; if(!f) return;
+  loadPlaylist({name:f.name, dir:'', ext:f.name.split('.').pop().toLowerCase(), bytes:new Uint8Array(await f.arrayBuffer())});
+};
+$('savePl').onclick = async () => {
+  if(!tracks.length){ flash('הרשימה ריקה – אין מה לשמור'); return; }
+  const entries = tracks.map(t => ({path:t.path, url:t.url, stream:!!t.stream, title:t.name, artist:t.artist, dur:t.dur||0}));
+  if(NATIVE){ const r = await NATIVE.savePlaylist('רשימת השמעה', entries); if(r && r.ok) setParts($('sub'), ['הרשימה נשמרה', r.name]); return; }
+  // דפדפן: אין מיקומי קבצים, נשמרים רק השמות וכתובות הרדיו
+  const lines = ['#EXTM3U'];
+  entries.forEach(en => { lines.push(`#EXTINF:${Math.round(en.dur)||-1},${en.artist ? en.artist+' - ' : ''}${en.title}`); lines.push(en.stream ? en.url : (en.path || en.title)); });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')+'\n'],{type:'audio/x-mpegurl'}));
+  a.download = 'רשימת השמעה.m3u8'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+};
+
+/* ===================== רדיו ===================== */
+let favs = store.get('gp-fav', []);
+const radioCache = {};
+let rbHost = 0, radioCat = null, radioShown = [];
+async function rb(params){
+  const qs = new URLSearchParams(Object.assign({hidebroken:'true', order:'clickcount', reverse:'true', limit:'100'}, params));
+  let lastErr;
+  for(let k=0;k<RB_HOSTS.length;k++){
+    const h = (rbHost + k) % RB_HOSTS.length;
+    try{
+      const r = await timeoutFetch(RB_HOSTS[h] + '/json/stations/search?' + qs, 9000);
+      if(!r.ok) throw new Error(r.status);
+      const js = await r.json(); rbHost = h;
+      return js.filter(s => (s.url_resolved || s.url) && !s.hls)
+        .map(s => ({uuid:s.stationuuid, name:(s.name||'').trim() || 'תחנה ללא שם', url:s.url_resolved || s.url, tags:s.tags||'', cc:s.countrycode||'', bitrate:s.bitrate||0, codec:s.codec||''}));
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('rb');
+}
+function rMsg(s){ if(Array.isArray(s)) setParts($('rMsg'), s); else $('rMsg').textContent = s || ''; }
+async function radioShow(cat, params, label){
+  radioCat = cat;
+  document.querySelectorAll('[data-cat]').forEach(b => b.classList.toggle('on', b.dataset.cat===cat));
+  if(cat==='fav'){ radioShown = favs.slice(); rMsg(favs.length ? ['מועדפים', nStations(favs.length)] : 'אין עדיין מועדפים. לחצו ★ ליד תחנה כדי להוסיף.'); renderRadio(); return; }
+  if(!navigator.onLine){ radioShown = []; renderRadio(); rMsg('אין חיבור לרשת – הרדיו זמין רק כשיש חיבור'); return; }
+  const c = radioCache[cat];
+  if(c && Date.now()-c.at < 30*60*1000){ radioShown = c.list; renderRadio(); rMsg([label, nStations(c.list.length)]); return; }
+  rMsg('טוען…'); radioShown = []; renderRadio();
+  try{
+    const list = await rb(params);
+    if(radioCat!==cat) return;
+    if(!cat.startsWith('q:')) radioCache[cat] = {at:Date.now(), list};
+    radioShown = list; renderRadio();
+    rMsg(list.length ? [label, nStations(list.length)] : 'לא נמצאו תחנות');
+  }catch(e){ if(radioCat===cat) rMsg('לא ניתן להתחבר למאגר התחנות. נסו שוב מאוחר יותר.'); }
+}
+const isFav = s => favs.some(f => f.uuid ? f.uuid===s.uuid : f.url===s.url);
+function renderRadio(){
+  const ul = $('rList'); ul.textContent = '';
+  const frag = document.createDocumentFragment();
+  radioShown.forEach((s,i) => {
+    const li = document.createElement('li'); li.dataset.i = i;
+    if(mode==='radio' && station && station.url===s.url) li.className = 'cur';
+    li.innerHTML = '<span class="t"></span><button class="x add" title="הוספה לרשימת ההשמעה">+</button><button class="x star" title="מועדפים">☆</button>';
+    const tt = li.querySelector('.t'); tt.textContent = s.name;
+    const sm = document.createElement('small'); setParts(sm, [s.tags.split(',').slice(0,3).join(', '), s.cc, s.bitrate ? s.bitrate+' קב"ש' : '']);
+    tt.appendChild(sm);
+    const star = li.querySelector('.star'); if(isFav(s)){ star.textContent='★'; star.classList.add('fav'); }
+    frag.appendChild(li);
+  });
+  ul.appendChild(frag);
+}
+function markStation(){ document.querySelectorAll('#rList li').forEach(li => { const s = radioShown[+li.dataset.i]; li.classList.toggle('cur', !!(mode==='radio' && station && s && s.url===station.url)); }); }
+$('rList').onclick = e => {
+  const li = e.target.closest('li'); if(!li) return;
+  const s = radioShown[+li.dataset.i]; if(!s) return;
+  if(e.target.classList.contains('star')){
+    if(isFav(s)) favs = favs.filter(f => !(f.uuid ? f.uuid===s.uuid : f.url===s.url)); else favs.push(s);
+    store.set('gp-fav', favs);
+    if(radioCat==='fav') radioShow('fav'); else renderRadio();
+    return;
+  }
+  if(e.target.classList.contains('add')){
+    addTracks([{name:s.name, artist:'', album:'', folder:'', url:s.url, stream:true, tagged:true}]);
+    rMsg(['נוספה לרשימת ההשמעה', s.name]); return;
+  }
+  (mode==='radio' && station && station.url===s.url) ? toggle() : playStation(s, radioShown.slice());
+};
+function playStation(s, queue){
+  const prev = idx;
+  mode = 'radio'; station = s; radioQueue = queue || [s];
+  if(objUrl){ URL.revokeObjectURL(objUrl); objUrl=null; }
+  audio.src = s.url;
+  showNow(); markStation(); updateRow(prev);
+  audio.play().catch(()=>{});
+  // ספירת האזנה לתחנה, כפי שמאגר התחנות מבקש (בקשה אחת, בלי לחכות לתשובה)
+  if(s.uuid && navigator.onLine) timeoutFetch(RB_HOSTS[rbHost] + '/json/url/' + encodeURIComponent(s.uuid), 6000).catch(()=>{});
+  if(tab==='lyrics') showLyrics();
+}
+document.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => {
+  const c = b.dataset.cat;
+  if(c==='metal') radioShow('metal', {tag:'metal'}, 'מטאל');
+  else if(c==='local') radioShow('local', {countrycode:'IL'}, 'תחנות מישראל');
+  else radioShow('fav');
+});
+function radioSearch(){
+  const q = $('rsQ').value.trim(), by = $('rsBy').value; if(!q) return;
+  let p;
+  if(by==='tag') p = {tag:q};
+  else if(by==='country') p = /^[a-z]{2}$/i.test(q) ? {countrycode:q.toUpperCase()} : {country:q};
+  else p = {name:q};
+  radioShow('q:'+by+':'+q, p, `חיפוש: ${q}`);
+}
+$('rsGo').onclick = radioSearch;
+$('rsQ').onkeydown = e => { if(e.key==='Enter') radioSearch(); };
+
+/* ===================== מילים (LRCLIB) ===================== */
+const lyrCache = new Map(Object.entries(store.get('gp-lyrics', {})));
+let lyr = {key:null, lines:null};
+function lyrKey(t){ return (t.artist+'|'+t.name).toLowerCase(); }
+function lyrMsg(text, head, retry){
+  const box = $('lyrics'); box.className = 'lyrics plain'; box.textContent = '';
+  const p = document.createElement('p'); p.textContent = text; p.style.color = 'var(--muted)'; box.appendChild(p);
+  if(head!==undefined){ if(Array.isArray(head)) setParts($('lyHead'), head); else $('lyHead').textContent = head; }
+  $('lyRetry').hidden = !retry; lyr.lines = null;
+}
+function parseLRC(s){
+  const out = [];
+  s.split(/\r?\n/).forEach(line => {
+    const tags = [...line.matchAll(/\[(\d{1,2}):(\d{2}(?:[.:]\d{1,3})?)\]/g)]; if(!tags.length) return;
+    const text = line.replace(/\[[^\]]*\]/g,'').trim();
+    tags.forEach(m => out.push({t: (+m[1])*60 + parseFloat(m[2].replace(':','.')), text}));
+  });
+  return out.sort((a,b)=>a.t-b.t);
+}
+function showLyricsData(t, data){
+  const head = (t.artist ? t.artist + ' – ' : '') + t.name;
+  if(!data || data.none){ lyrMsg('לא נמצאו מילים לשיר הזה.', head); return; }
+  if(data.instrumental){ lyrMsg('קטע כלי, ללא מילים.', head); return; }
+  setParts($('lyHead'), [head, data.synced ? 'מילים מתוזמנות' : '']); $('lyRetry').hidden = true;
+  const box = $('lyrics'); box.textContent = ''; box.scrollTop = 0;
+  if(data.synced){
+    lyr.lines = parseLRC(data.synced); lyr.cur = -1;
+    box.className = 'lyrics';
+    const frag = document.createDocumentFragment();
+    lyr.lines.forEach(l => { const p = document.createElement('p'); if(l.text) p.textContent = l.text; else p.className = 'gap'; frag.appendChild(p); l.el = p; });
+    box.appendChild(frag); syncLyrics();
+  } else {
+    lyr.lines = null; box.className = 'lyrics plain';
+    const frag = document.createDocumentFragment();
+    data.plain.split(/\r?\n/).forEach(line => { const p = document.createElement('p'); if(line.trim()) p.textContent = line; else p.className = 'gap'; frag.appendChild(p); });
+    box.appendChild(frag);
+  }
+}
+async function showLyrics(){
+  if(mode==='radio'){ lyr.key = null; lyrMsg('אין מילים לשידורי רדיו.', 'מילים'); return; }
+  if(idx<0){ lyr.key = null; lyrMsg('אין שיר מתנגן.', 'מילים'); return; }
+  const t = tracks[idx];
+  if(t.stream){ lyr.key = null; lyrMsg('אין מילים לשידורים חיים.', t.name); return; }
+  const key = lyrKey(t);
+  if(lyr.key===key && ($('lyrics').childElementCount && $('lyRetry').hidden)) return;  // כבר מוצג
+  lyr.key = key;
+  const head = (t.artist ? t.artist + ' – ' : '') + t.name;
+  if(lyrCache.has(key)){ showLyricsData(t, lyrCache.get(key)); return; }
+  if(!navigator.onLine){ lyrMsg('אין חיבור לרשת, ולכן אין מילים כרגע.', head, true); return; }
+  lyrMsg('מחפש מילים…', head);
+  try{
+    const data = await fetchLyrics(t);
+    lyrCache.set(key, data);
+    if(lyrCache.size > 150) lyrCache.delete(lyrCache.keys().next().value);
+    store.set('gp-lyrics', Object.fromEntries(lyrCache));
+    if(lyr.key===key) showLyricsData(t, data);
+  }catch(e){ if(lyr.key===key) lyrMsg('לא ניתן להתחבר לשירות המילים.', head, true); }
+}
+async function fetchLyrics(t){
+  const ask = async params => { const r = await timeoutFetch(LRCLIB + '/api/search?' + new URLSearchParams(params), 9000); if(!r.ok) throw new Error(r.status); return r.json(); };
+  let res = await ask(t.artist ? {track_name:t.name, artist_name:t.artist} : {q:t.name});
+  if(!res.length && t.artist) res = await ask({q:t.artist + ' ' + t.name});
+  if(!res.length) return {none:true};
+  const dur = isFinite(audio.duration) && audio.duration>0 ? audio.duration : (t.dur||0);
+  let best = null, bestScore = -1e9;
+  res.slice(0,20).forEach(r => {
+    let sc = 0;
+    if(r.syncedLyrics) sc += 2;
+    if(r.plainLyrics || r.syncedLyrics) sc += 4;
+    if(dur && r.duration){ const d = Math.abs(r.duration-dur); sc += d<=2 ? 4 : d<=6 ? 2 : d>30 ? -3 : 0; }
+    if(sc > bestScore){ bestScore = sc; best = r; }
+  });
+  if(!best) return {none:true};
+  if(best.instrumental && !best.plainLyrics && !best.syncedLyrics) return {instrumental:true};
+  if(!best.plainLyrics && !best.syncedLyrics) return {none:true};
+  return {synced: best.syncedLyrics || '', plain: best.plainLyrics || (best.syncedLyrics ? best.syncedLyrics.replace(/\[[^\]]*\]/g,'').trim() : '')};
+}
+function syncLyrics(){
+  if(!lyr.lines || tab!=='lyrics') return;
+  const ct = audio.currentTime + 0.25, L = lyr.lines;
+  let lo = 0, hi = L.length-1, k = -1;
+  while(lo<=hi){ const m = (lo+hi)>>1; if(L[m].t<=ct){ k=m; lo=m+1; } else hi=m-1; }
+  if(k===lyr.cur) return;
+  if(lyr.cur>=0 && L[lyr.cur]) L[lyr.cur].el.classList.remove('now');
+  lyr.cur = k;
+  if(k>=0){ const el = L[k].el, box = $('lyrics'); el.classList.add('now'); box.scrollTop = el.offsetTop - box.clientHeight/2 + el.offsetHeight/2; }
+}
+$('lyRetry').onclick = () => { lyr.key = null; showLyrics(); };
+window.addEventListener('online', () => { if(tab==='lyrics' && !$('lyRetry').hidden){ lyr.key = null; showLyrics(); } });
+
+/* ===================== לשוניות ===================== */
+let tab = 'list';
+function setTab(t){
+  tab = t;
+  document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab===t));
+  $('pList').classList.toggle('on', t==='list'); $('pRadio').classList.toggle('on', t==='radio'); $('pLyrics').classList.toggle('on', t==='lyrics');
+  if(t==='lyrics') showLyrics();
+  if(t==='radio' && !radioCat) radioShow(favs.length ? 'fav' : 'metal', {tag:'metal'}, 'מטאל');
+  store.set('gp-tab', t);
+}
+document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+
+/* ===================== בקרים ===================== */
+function setFill(el){ el.style.setProperty('--p', (el.value-el.min)/(el.max-el.min)*100+'%'); }
+$('play').onclick = toggle;
+$('next').onclick = () => step(1);
+$('prev').onclick = () => step(-1);
+$('shuffle').onclick = () => { shuffle=!shuffle; $('shuffle').classList.toggle('on',shuffle); rebuildOrder(); };
+$('repeat').onclick = () => {
+  repeat=(repeat+1)%3; const b=$('repeat');
+  b.classList.toggle('on',repeat>0);
+  b.title = 'חזרה: ' + ['כבויה','כל הרשימה','רצועה אחת'][repeat] + ' (R)';
+  $('repIcon').innerHTML = repeat===2
+    ? '<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/>'
+    : '<path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>';
+};
+$('addFiles').onclick = async () => { if(NATIVE){ const it = await NATIVE.pickAudio(); if(it && it.length) addItems(it); } else $('fileIn').click(); };
+$('addFolder').onclick = async () => { if(NATIVE){ const it = await NATIVE.pickFolder(); if(it && it.length) addItems(it); } else $('dirIn').click(); };
+$('fileIn').onchange = e => { addFiles(e.target.files); e.target.value=''; };
+$('dirIn').onchange = e => { addFiles(e.target.files); e.target.value=''; };
+$('clear').onclick = () => { if(mode==='list'){ stopList(); resetNow(); } tracks=[]; idx=-1; order=[]; render(); saveList(); };
+$('search').oninput = render;
+
+const seek = $('seek'); let dragging=false;
+seek.oninput = () => { dragging=true; setFill(seek); $('cur').textContent = fmt(seek.value/1000*audio.duration); };
+seek.onchange = () => { if(isFinite(audio.duration)) audio.currentTime = seek.value/1000*audio.duration; dragging=false; };
+const vol = $('vol');
+vol.oninput = () => { audio.volume = vol.value/100; audio.muted=false; setFill(vol); updVolIcon(); store.set('gp-vol', +vol.value); };
+$('mute').onclick = () => { audio.muted=!audio.muted; updVolIcon(); };
+function updVolIcon(){ $('mute').style.opacity = (audio.muted||audio.volume===0) ? .4 : 1; }
+vol.value = store.get('gp-vol', 80); audio.volume = vol.value/100; setFill(vol);
+
+function isLive(){ return !isFinite(audio.duration) || mode==='radio'; }
+audio.ontimeupdate = () => {
+  if(lyr.lines) syncLyrics();
+  if(dragging) return;
+  $('cur').textContent = fmt(audio.currentTime);
+  if(isLive()) return;
+  seek.value = audio.duration ? audio.currentTime/audio.duration*1000 : 0; setFill(seek);
+};
+audio.onloadedmetadata = () => {
+  const live = isLive();
+  $('player').classList.toggle('live', live);
+  $('dur').textContent = live ? 'חי' : fmt(audio.duration);
+  if(live){ seek.value = 0; setFill(seek); }
+  if(mode==='list' && idx>=0 && !live){ const t = tracks[idx]; if(!t.dur){ t.dur = audio.duration; saveList(); } }
+};
+audio.onplay = audio.onpause = () => {
+  $('playIcon').innerHTML = audio.paused ? '<path d="M8 5v14l11-7z"/>' : '<path d="M6 5h4v14H6zm8 0h4v14h-4z"/>';
+  if(mode==='list') updateRow(idx);
+  if(!audio.paused) setSession();
+};
+audio.onended = () => { if(mode==='radio') return; if(repeat===2){ audio.currentTime=0; play(); } else step(1); };
+audio.onerror = () => {
+  if(!audio.getAttribute('src')) return;
+  if(mode==='radio'){ $('sub').textContent = 'התחנה לא זמינה כרגע. נסו תחנה אחרת.'; return; }
+  if(idx>=0){
+    const t = tracks[idx];
+    if(t.stream){ $('sub').textContent = 'השידור לא זמין כרגע'; return; }
+    t.missing = true; updateRow(idx);
+    $('sub').textContent='לא ניתן לנגן את הקובץ – מדלג…'; setTimeout(()=>step(1),1200);
+  }
+};
+
+/* ---- גרירה ושחרור: קבצים, תיקיות ורשימות השמעה ---- */
+document.body.addEventListener('dragover', e => { e.preventDefault(); $('pList').classList.add('drop'); });
+document.body.addEventListener('dragleave', e => { if(!e.relatedTarget) $('pList').classList.remove('drop'); });
+document.body.addEventListener('drop', async e => {
+  e.preventDefault(); $('pList').classList.remove('drop');
+  const files = [...(e.dataTransfer.files||[])];
+  if(NATIVE){
+    const paths = files.map(f => NATIVE.pathForFile(f)).filter(Boolean);
+    const pl = paths.find(p => /\.(m3u8?|pls)$/i.test(p));
+    if(pl){ const r = await NATIVE.readPlaylist(pl); if(r) loadPlaylist(r); return; }
+    const it = await NATIVE.expandPaths(paths); if(it.length){ setTab('list'); addItems(it); }
+    return;
+  }
+  const plf = files.find(f => /\.(m3u8?|pls)$/i.test(f.name));
+  if(plf){ loadPlaylist({name:plf.name, dir:'', ext:plf.name.split('.').pop().toLowerCase(), bytes:new Uint8Array(await plf.arrayBuffer())}); return; }
+  const items = [...(e.dataTransfer.items||[])].map(it=>it.webkitGetAsEntry && it.webkitGetAsEntry()).filter(Boolean);
+  if(!items.length){ addFiles(files); return; }
+  const out = [];
+  async function walk(entry, path){
+    if(entry.isFile){ await new Promise(r=>entry.file(f=>{ try{Object.defineProperty(f,'webkitRelativePath',{value:path+f.name});}catch(_){} out.push(f); r(); }, r)); }
+    else if(entry.isDirectory){
+      const reader = entry.createReader(); let batch;
+      do { batch = await new Promise(r=>reader.readEntries(r, ()=>r([]))); for(const en of batch) await walk(en, path+entry.name+'/'); } while(batch.length);
+    }
+  }
+  for(const en of items) await walk(en, '');
+  addFiles(out);
+});
+
+/* ---- מקלדת: לפי מיקום המקש, כך שהקיצורים עובדים גם כשהמקלדת על עברית ---- */
+document.addEventListener('keydown', e => {
+  if((e.target.tagName==='INPUT' && e.target.type!=='range') || e.target.tagName==='SELECT') return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  switch(e.code){
+    case 'Space': e.preventDefault(); toggle(); break;
+    case 'ArrowRight': if(!isLive()){ e.preventDefault(); audio.currentTime=Math.min(audio.duration||0,audio.currentTime+5); } break;
+    case 'ArrowLeft': if(!isLive()){ e.preventDefault(); audio.currentTime=Math.max(0,audio.currentTime-5); } break;
+    case 'ArrowUp': e.preventDefault(); vol.value=Math.min(100,+vol.value+5); vol.oninput(); break;
+    case 'ArrowDown': e.preventDefault(); vol.value=Math.max(0,+vol.value-5); vol.oninput(); break;
+    case 'KeyN': step(1); break;
+    case 'KeyP': step(-1); break;
+    case 'KeyS': $('shuffle').click(); break;
+    case 'KeyR': $('repeat').click(); break;
+    case 'KeyM': $('mute').click(); break;
+  }
+});
+
+/* ---- מקשי מדיה ומרכז הבקרה של מק ---- */
+if('mediaSession' in navigator){
+  navigator.mediaSession.setActionHandler('play', play);
+  navigator.mediaSession.setActionHandler('pause', ()=>audio.pause());
+  navigator.mediaSession.setActionHandler('nexttrack', ()=>step(1));
+  navigator.mediaSession.setActionHandler('previoustrack', ()=>step(-1));
+}
+
+/* ---- ערכות צבע: ענבר, לבן (לבן על שחור), נייר (שחור על לבן) ---- */
+const THEMES = ['amber','bw','wb'], THEME_NAMES = {amber:'ענבר', bw:'לבן', wb:'נייר'};
+let theme = 'amber';
+function setTheme(t){
+  theme = THEMES.includes(t) ? t : 'amber';
+  document.documentElement.dataset.theme = theme;
+  $('bTheme').textContent = THEME_NAMES[theme];
+  store.set('gp-theme', theme);
+}
+$('bTheme').onclick = () => setTheme(THEMES[(THEMES.indexOf(theme)+1) % THEMES.length]);
+
+/* ---- התחלה ---- */
+setTheme(store.get('gp-theme', 'amber'));
+if(NATIVE){
+  const saved = store.get('gp-list', []);
+  if(saved.length){
+    tracks = saved; rebuildOrder();
+    const i = store.get('gp-idx', 0);
+    if(i>=0 && i<tracks.length) load(i, false);
+  }
+}
+render();
+setTab(store.get('gp-tab', 'list'));
+</script>
+</body>
+</html>
